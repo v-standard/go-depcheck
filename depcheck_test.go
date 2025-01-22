@@ -23,9 +23,10 @@ rules:
   - from: "example/from.*$"
     to:
       - "example/to.*$"
-    exceptions:
+    allowedDependencies:
       - "example/to/exception.*$"
-    ignoreTest: true
+    ignorePatterns:
+      - ".*_test.go$"
 `)
 
 	if err := os.WriteFile(configPath, config, 0644); err != nil {

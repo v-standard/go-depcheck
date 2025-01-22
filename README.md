@@ -8,8 +8,8 @@ The tool provides robust dependency validation through:
 
 - YAML-based dependency rule definitions that are easy to read and maintain
 - Package pattern matching using regular expressions for flexible rule creation
-- Rule-specific control over test file analysis
-- Configuration-based exceptions for handling necessary architectural deviations
+- Fine-grained control over which files to analyze or ignore
+- Configurable dependency allowances for architectural exceptions
 - Seamless integration with Go's standard static analysis framework
 
 ## Installation
@@ -31,9 +31,11 @@ rules:
   - from: "^github.com/your-org/project/core/.*$"
     to: 
       - "^github.com/your-org/project/presentation.*$"
-    exceptions:
+    allowedDependencies:
       - "^github.com/your-org/project/presentation/types.*$"
-    ignoreTest: true  # Skip checking test files for this rule
+    ignorePatterns:
+      - "mock_.*.go$"
+      - "_test.go$"
 ```
 
 ### Project Integration
@@ -59,37 +61,42 @@ go vet -vettool=$(which depcheck) ./...
 
 ## Configuration Details
 
-The `depcheck.yml` configuration file uses a straightforward structure to define dependency rules. Each rule consists of a source pattern ("from"), target patterns ("to"), optional exceptions, and test file handling settings. Here's a comprehensive example:
+The `depcheck.yml` configuration file uses a straightforward structure to define dependency rules. Each rule consists of several key components:
 
 ```yaml
 rules:
-  # Prevent domain layer from depending on infrastructure, including test files
+  # Prevent domain layer from depending on infrastructure
   - from: "^github.com/your-org/project/domain/.*$"    # Source package pattern
     to:                                                # Restricted package patterns
       - "^github.com/your-org/project/infra/.*$"
       - "^github.com/your-org/project/presentation/.*$"
-    exceptions:                                        # Allowed exception patterns
+    allowedDependencies:                               # Exceptions to dependency restrictions
       - "^github.com/your-org/project/presentation/types.*$"
-    ignoreTest: false                                 # Include test files in checks
-
-  # Restrict presentation layer dependencies, excluding test files
-  - from: "^github.com/your-org/project/presentation/.*$"
-    to:
-      - "^github.com/your-org/project/infrastructure/.*$"
-    exceptions:
-      - "^github.com/your-org/project/infrastructure/common.*$"
-    ignoreTest: true                                  # Skip test files for this rule
+    ignorePatterns:                                    # Files to exclude from analysis
+      - "mock_.*.go$"      # Generated mock files
+      - ".*_mock.go$"      # Alternative mock file naming
+      - "_test.go$"        # Test files
 ```
 
-The rules use regular expressions for pattern matching, allowing for flexible and powerful dependency control. The analyzer will report violations when it finds imports that match the "to" patterns but aren't covered by the exceptions.
+Let's break down each component:
 
-In this configuration:
-- The "from" field specifies which packages the rule applies to
-- The "to" field lists patterns for restricted imports
-- The "exceptions" field defines patterns for allowed exceptions to the rule
-- The "ignoreTest" field controls whether the rule applies to test files (files ending with `_test.go`)
+1. `from`: Specifies the package pattern where this rule applies. This pattern matches against the package that contains the import statement being checked.
 
-The test file handling feature (`ignoreTest`) allows you to:
-- Set different dependency rules for test files and production code
-- Skip dependency checks for test files where more relaxed rules might be appropriate
-- Maintain stricter control over production code dependencies while allowing necessary testing patterns
+2. `to`: Lists package patterns that should be restricted. When an import matches any of these patterns, it will be flagged as a violation unless allowed by other rules.
+
+3. `allowedDependencies`: Defines exceptions to the restricted patterns. If an import matches both a `to` pattern and an `allowedDependencies` pattern, it will be allowed. This is useful for permitting specific cross-layer dependencies that are architecturally acceptable.
+
+4. `ignorePatterns`: Specifies patterns for files that should be completely excluded from analysis. These patterns match against filenames, making it easy to skip generated files, test files, or any other special cases. This is particularly useful for:
+    - Generated mock files (which often need to import the mocked dependencies)
+    - Test files that may need more relaxed dependency rules
+    - Any other generated or special-purpose files that shouldn't be subject to the normal dependency rules
+
+All patterns use Go's regular expression syntax, providing powerful and flexible matching capabilities. Patterns are matched against full package paths for `from`, `to`, and `allowedDependencies`, and against filenames for `ignorePatterns`.
+
+The tool processes these rules in the following order:
+1. First, it checks if the file matches any `ignorePatterns` - if so, it's skipped entirely
+2. Then, it checks if the importing package matches the `from` pattern
+3. If an import matches any `to` pattern, it's checked against `allowedDependencies`
+4. If the import isn't in `allowedDependencies`, it's reported as a violation
+
+This hierarchical processing ensures clear and predictable rule evaluation, making it easier to understand and debug dependency violations.

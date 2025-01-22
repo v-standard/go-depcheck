@@ -18,10 +18,10 @@ const doc = "depcheck checks package dependency rules defined in YAML"
 
 // DependencyRule represents a single dependency rule
 type DependencyRule struct {
-	From       string   `yaml:"from"`       // Source package pattern
-	To         []string `yaml:"to"`         // Target package patterns (multiple allowed)
-	Exceptions []string `yaml:"exceptions"` // Package patterns allowed as exceptions
-	IgnoreTest bool     `yaml:"ignoreTest"` // When true, test files will be excluded for this rule
+	From                string   `yaml:"from"`                // Source package pattern
+	To                  []string `yaml:"to"`                  // Target package patterns (multiple allowed)
+	AllowedDependencies []string `yaml:"allowedDependencies"` // Patterns for allowed dependencies
+	IgnorePatterns      []string `yaml:"ignorePatterns"`      // Patterns for files to exclude from analysis
 
 }
 
@@ -32,10 +32,10 @@ type Config struct {
 
 // compiledRule holds the compiled regular expressions for rule matching
 type compiledRule struct {
-	from       *regexp.Regexp
-	to         []*regexp.Regexp
-	exceptions []*regexp.Regexp
-	ignoreTest bool
+	from                *regexp.Regexp
+	to                  []*regexp.Regexp
+	allowedDependencies []*regexp.Regexp
+	ignorePatterns      []*regexp.Regexp
 }
 
 var Analyzer = &analysis.Analyzer{
@@ -80,10 +80,10 @@ func prepare() error {
 	compiledRules = make([]compiledRule, 0, len(config.Rules))
 	for _, rule := range config.Rules {
 		compiled := compiledRule{
-			from:       regexp.MustCompile(rule.From),
-			to:         make([]*regexp.Regexp, 0, len(rule.To)),
-			exceptions: make([]*regexp.Regexp, 0, len(rule.Exceptions)),
-			ignoreTest: rule.IgnoreTest,
+			from:                regexp.MustCompile(rule.From),
+			to:                  make([]*regexp.Regexp, 0, len(rule.To)),
+			allowedDependencies: make([]*regexp.Regexp, 0, len(rule.AllowedDependencies)),
+			ignorePatterns:      make([]*regexp.Regexp, 0, len(rule.IgnorePatterns)),
 		}
 
 		// Compile target patterns
@@ -91,9 +91,14 @@ func prepare() error {
 			compiled.to = append(compiled.to, regexp.MustCompile(toPattern))
 		}
 
-		// Compile exception patterns
-		for _, exceptionPattern := range rule.Exceptions {
-			compiled.exceptions = append(compiled.exceptions, regexp.MustCompile(exceptionPattern))
+		// Compile allowed dependency patterns
+		for _, allowedPattern := range rule.AllowedDependencies {
+			compiled.allowedDependencies = append(compiled.allowedDependencies, regexp.MustCompile(allowedPattern))
+		}
+
+		// Compile ignore patterns
+		for _, ignorePattern := range rule.IgnorePatterns {
+			compiled.ignorePatterns = append(compiled.ignorePatterns, regexp.MustCompile(ignorePattern))
 		}
 
 		compiledRules = append(compiledRules, compiled)
@@ -146,10 +151,20 @@ func hasExceptionComment(spec *ast.ImportSpec) bool {
 	return false
 }
 
-// isException checks if an import path is allowed as an exception
-func isException(rule compiledRule, importPath string) bool {
-	for _, exceptionPattern := range rule.exceptions {
-		if exceptionPattern.MatchString(importPath) {
+// shouldIgnore checks if a file should be ignored based on ignore patterns
+func shouldIgnore(rule compiledRule, filename string) bool {
+	for _, pattern := range rule.ignorePatterns {
+		if pattern.MatchString(filename) {
+			return true
+		}
+	}
+	return false
+}
+
+// isAllowed checks if an import path is allowed as an exception
+func isAllowed(rule compiledRule, importPath string) bool {
+	for _, allowedPattern := range rule.allowedDependencies {
+		if allowedPattern.MatchString(importPath) {
 			return true
 		}
 	}
@@ -191,13 +206,13 @@ func run(pass *analysis.Pass) (any, error) {
 					continue
 				}
 
-				// Check if the rule is configured to ignore test files
-				if rule.ignoreTest && strings.HasSuffix(filename, "_test.go") {
+				// Skip files matching ignore patterns
+				if shouldIgnore(rule, filename) {
 					continue
 				}
 
-				// Check for configuration-based exceptions
-				if isException(rule, path) {
+				// Check for allowed dependencies
+				if isAllowed(rule, path) {
 					continue
 				}
 
