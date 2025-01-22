@@ -8,6 +8,7 @@ The tool provides robust dependency validation through:
 
 - YAML-based dependency rule definitions that are easy to read and maintain
 - Package pattern matching using regular expressions for flexible rule creation
+- Rule-specific control over test file analysis
 - Configuration-based exceptions for handling necessary architectural deviations
 - Seamless integration with Go's standard static analysis framework
 
@@ -32,6 +33,7 @@ rules:
       - "^github.com/your-org/project/presentation.*$"
     exceptions:
       - "^github.com/your-org/project/presentation/types.*$"
+    ignoreTest: true  # Skip checking test files for this rule
 ```
 
 ### Project Integration
@@ -55,34 +57,28 @@ You can run the dependency check using Go's built-in vet tool:
 go vet -vettool=$(which depcheck) ./...
 ```
 
-For integration with golangci-lint, add the following to your `.golangci.yml`:
-
-```yaml
-linters:
-  enable:
-    - depcheck
-```
-
 ## Configuration Details
 
-The `depcheck.yml` configuration file uses a straightforward structure to define dependency rules. Each rule consists of a source pattern ("from"), target patterns ("to"), and optional exceptions. Here's a comprehensive example:
+The `depcheck.yml` configuration file uses a straightforward structure to define dependency rules. Each rule consists of a source pattern ("from"), target patterns ("to"), optional exceptions, and test file handling settings. Here's a comprehensive example:
 
 ```yaml
 rules:
-  # Prevent domain layer from depending on infrastructure
+  # Prevent domain layer from depending on infrastructure, including test files
   - from: "^github.com/your-org/project/domain/.*$"    # Source package pattern
     to:                                                # Restricted package patterns
       - "^github.com/your-org/project/infra/.*$"
       - "^github.com/your-org/project/presentation/.*$"
     exceptions:                                        # Allowed exception patterns
       - "^github.com/your-org/project/presentation/types.*$"
+    ignoreTest: false                                 # Include test files in checks
 
-  # Restrict presentation layer dependencies
+  # Restrict presentation layer dependencies, excluding test files
   - from: "^github.com/your-org/project/presentation/.*$"
     to:
       - "^github.com/your-org/project/infrastructure/.*$"
     exceptions:
       - "^github.com/your-org/project/infrastructure/common.*$"
+    ignoreTest: true                                  # Skip test files for this rule
 ```
 
 The rules use regular expressions for pattern matching, allowing for flexible and powerful dependency control. The analyzer will report violations when it finds imports that match the "to" patterns but aren't covered by the exceptions.
@@ -91,3 +87,9 @@ In this configuration:
 - The "from" field specifies which packages the rule applies to
 - The "to" field lists patterns for restricted imports
 - The "exceptions" field defines patterns for allowed exceptions to the rule
+- The "ignoreTest" field controls whether the rule applies to test files (files ending with `_test.go`)
+
+The test file handling feature (`ignoreTest`) allows you to:
+- Set different dependency rules for test files and production code
+- Skip dependency checks for test files where more relaxed rules might be appropriate
+- Maintain stricter control over production code dependencies while allowing necessary testing patterns

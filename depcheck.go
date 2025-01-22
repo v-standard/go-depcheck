@@ -21,6 +21,8 @@ type DependencyRule struct {
 	From       string   `yaml:"from"`       // Source package pattern
 	To         []string `yaml:"to"`         // Target package patterns (multiple allowed)
 	Exceptions []string `yaml:"exceptions"` // Package patterns allowed as exceptions
+	IgnoreTest bool     `yaml:"ignoreTest"` // When true, test files will be excluded for this rule
+
 }
 
 // Config represents the structure of the YAML configuration file
@@ -33,6 +35,7 @@ type compiledRule struct {
 	from       *regexp.Regexp
 	to         []*regexp.Regexp
 	exceptions []*regexp.Regexp
+	ignoreTest bool
 }
 
 var Analyzer = &analysis.Analyzer{
@@ -80,6 +83,7 @@ func prepare() error {
 			from:       regexp.MustCompile(rule.From),
 			to:         make([]*regexp.Regexp, 0, len(rule.To)),
 			exceptions: make([]*regexp.Regexp, 0, len(rule.Exceptions)),
+			ignoreTest: rule.IgnoreTest,
 		}
 
 		// Compile target patterns
@@ -167,6 +171,9 @@ func run(pass *analysis.Pass) (any, error) {
 	pkgpath := pass.Pkg.Path()
 
 	for _, file := range pass.Files {
+		pos := pass.Fset.Position(file.Pos())
+		filename := filepath.Base(pos.Filename)
+
 		for _, spec := range file.Imports {
 			path, err := strconv.Unquote(spec.Path.Value)
 			if err != nil {
@@ -181,6 +188,11 @@ func run(pass *analysis.Pass) (any, error) {
 			// Check against each rule
 			for _, rule := range compiledRules {
 				if !rule.from.MatchString(pkgpath) {
+					continue
+				}
+
+				// Check if the rule is configured to ignore test files
+				if rule.ignoreTest && strings.HasSuffix(filename, "_test.go") {
 					continue
 				}
 

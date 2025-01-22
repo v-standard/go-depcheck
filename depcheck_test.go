@@ -25,6 +25,7 @@ rules:
       - "example/to.*$"
     exceptions:
       - "example/to/exception.*$"
+    ignoreTest: true
 `)
 
 	if err := os.WriteFile(configPath, config, 0644); err != nil {
