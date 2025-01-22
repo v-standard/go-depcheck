@@ -1,8 +1,7 @@
 package main
 
 import (
-	"depcheck"
-
+	"github.com/v-standard/go-depcheck"
 	"golang.org/x/tools/go/analysis/unitchecker"
 )
 

@@ -9,18 +9,18 @@ import (
 )
 
 func TestAnalyzer(t *testing.T) {
-	// テスト用の一時ディレクトリを作成
+	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "depcheck-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// テスト用の設定ファイルを作成
-	configPath := filepath.Join(tmpDir, "rules.yml")
+	// Create a test configuration file
+	configPath := filepath.Join(tmpDir, "depcheck.yml")
 	config := []byte(`
 rules:
-  - from: "example/from/.*$"
+  - from: "example/from.*$"
     to:
       - "example/to.*$"
     exceptions:
@@ -31,22 +31,22 @@ rules:
 		t.Fatal(err)
 	}
 
-	// 環境変数で設定ファイルのパスを指定
+	// Set configuration file path via environment variable
 	os.Setenv("DEPCHECK_CONFIG", configPath)
 
-	// テストデータのディレクトリを用意
+	// Prepare test data directory
 	testdata := analysistest.TestData()
 
-	// テストを実行
+	// Execute the test
 	analysistest.Run(t, testdata, Analyzer, "example/...")
 }
 
-// TestExceptionComment はコメントによる例外機能をテストします
+// TestExceptionComment tests the exception comment functionality
 func TestExceptionComment(t *testing.T) {
 	spec := &ast.ImportSpec{
 		Doc: &ast.CommentGroup{
 			List: []*ast.Comment{
-				{Text: "// depcheck:allow テスト用に一時的に許可"},
+				{Text: "// depcheck:allow temporarily allowed for testing"},
 			},
 		},
 	}
