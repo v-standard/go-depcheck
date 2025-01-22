@@ -16,6 +16,12 @@ import (
 
 const doc = "depcheck checks package dependency rules defined in YAML"
 
+// Config represents the structure of the YAML configuration file
+type Config struct {
+	IgnorePatterns []string         `yaml:"ignorePatterns"` // Global patterns to ignore
+	Rules          []DependencyRule `yaml:"rules"`
+}
+
 // DependencyRule represents a single dependency rule
 type DependencyRule struct {
 	From                string   `yaml:"from"`                // Source package pattern
@@ -23,11 +29,6 @@ type DependencyRule struct {
 	AllowedDependencies []string `yaml:"allowedDependencies"` // Patterns for allowed dependencies
 	IgnorePatterns      []string `yaml:"ignorePatterns"`      // Patterns for files to exclude from analysis
 
-}
-
-// Config represents the structure of the YAML configuration file
-type Config struct {
-	Rules []DependencyRule `yaml:"rules"`
 }
 
 // compiledRule holds the compiled regular expressions for rule matching
@@ -49,8 +50,9 @@ var Analyzer = &analysis.Analyzer{
 
 // Variables to hold compiled rules and manage initialization state with mutex
 var (
-	compiledRules []compiledRule
-	initOnce      sync.Once
+	compiledRules          []compiledRule
+	compiledIgnorePatterns []*regexp.Regexp
+	initOnce               sync.Once
 )
 
 func prepare() error {
@@ -74,6 +76,16 @@ func prepare() error {
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return fmt.Errorf("warning: Could not parse config file: %v\n", err)
+	}
+
+	// Compile global ignore patterns
+	compiledIgnorePatterns = make([]*regexp.Regexp, 0, len(config.IgnorePatterns))
+	for _, pattern := range config.IgnorePatterns {
+		compiled, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("invalid ignore pattern %q: %v", pattern, err)
+		}
+		compiledIgnorePatterns = append(compiledIgnorePatterns, compiled)
 	}
 
 	// Compile rules
@@ -152,12 +164,19 @@ func hasExceptionComment(spec *ast.ImportSpec) bool {
 }
 
 // shouldIgnore checks if a file should be ignored based on ignore patterns
-func shouldIgnore(rule compiledRule, filename string) bool {
-	for _, pattern := range rule.ignorePatterns {
+func shouldIgnoreFile(filename string, globalPatterns []*regexp.Regexp, rulePatterns []*regexp.Regexp) bool {
+	for _, pattern := range globalPatterns {
 		if pattern.MatchString(filename) {
 			return true
 		}
 	}
+
+	for _, pattern := range rulePatterns {
+		if pattern.MatchString(filename) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -207,7 +226,7 @@ func run(pass *analysis.Pass) (any, error) {
 				}
 
 				// Skip files matching ignore patterns
-				if shouldIgnore(rule, filename) {
+				if shouldIgnoreFile(filename, compiledIgnorePatterns, rule.ignorePatterns) {
 					continue
 				}
 

@@ -19,6 +19,8 @@ func TestAnalyzer(t *testing.T) {
 	// Create a test configuration file
 	configPath := filepath.Join(tmpDir, "depcheck.yml")
 	config := []byte(`
+ignorePatterns:
+  - ".*_mock.go$"
 rules:
   - from: "example/from.*$"
     to:
