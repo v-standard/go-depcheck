@@ -19,7 +19,7 @@ The tool provides robust dependency validation through:
 Install the tool using the standard Go tools:
 
 ```bash
-go install github.com/v-standard/go-depcheck@latest
+go install github.com/v-standard/go-depcheck/cmd/depcheck@latest
 ```
 
 ## Usage
