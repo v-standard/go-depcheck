@@ -8,10 +8,10 @@ A static analysis tool for validating package dependencies in Go projects. This 
 
 The tool provides robust dependency validation through:
 
-- YAML-based dependency rule definitions that are easy to read and maintain
-- Package pattern matching using regular expressions for flexible rule creation
-- Multi-level file exclusion patterns (global and rule-specific)
-- Configurable dependency allowances for architectural exceptions
+- Define forbidden dependency patterns using regular expressions
+- Package pattern matching for flexible rule creation
+- Multiple ways to exclude dependencies (global patterns, rule-specific patterns, and inline comments)
+- Configurable exceptions to forbidden dependencies
 - Seamless integration with Go's standard static analysis framework
 
 ## Installation
@@ -31,19 +31,20 @@ Create a `depcheck.yml` in your project root directory. The configuration file c
 ```yaml
 # Global patterns to ignore across all rules
 ignorePatterns:
-  - "mock_.*.go$"
-  - ".*_mock.go$"
-  - "_test.go$"
+  - 'mock_.*\.go$'
+  - '.*_mock\.go$'
+  - '_test\.go$'
 
-# Dependency rules
+# Define forbidden dependencies
 rules:
-  - from: "^github.com/your-org/project/core/.*$"
-    to: 
-      - "^github.com/your-org/project/presentation.*$"
-    allowedDependencies:
-      - "^github.com/your-org/project/presentation/types.*$"
-    ignorePatterns:  # Rule-specific patterns to ignore
-      - "special_case_.*.go$"
+  # Prevent core layer from depending on presentation layer
+  - from: '^github.com/your-org/project/core/.*$'    # Source package
+    to:                                              # Forbidden dependencies
+      - '^github.com/your-org/project/presentation.*$'
+    allowedDependencies:                             # Exceptions to forbidden dependencies
+      - '^github.com/your-org/project/presentation/types.*$'
+    ignorePatterns:                                  # Rule-specific patterns to ignore
+      - 'special_case_.*\.go$'
 ```
 
 ### Project Integration
@@ -69,44 +70,52 @@ go vet -vettool=$(which depcheck) ./...
 
 ## Configuration Details
 
-The `depcheck.yml` configuration file uses a straightforward structure that allows for both global and rule-specific settings. Let's look at each component in detail:
+The `depcheck.yml` configuration file allows for both global and rule-specific settings. Let's look at each component in detail:
 
-### Global Ignore Patterns
+### Excluding Dependencies
 
-At the root level, you can define patterns for files that should be ignored across all rules:
+There are three ways to exclude dependencies from checks:
 
+1. **Global Ignore Patterns**: Files that should be ignored across all rules
 ```yaml
 ignorePatterns:
-  - "mock_.*.go$"      # Generated mock files
-  - ".*_mock.go$"      # Alternative mock file naming
-  - "_test.go$"        # Test files
+  - 'mock_.*\.go$'
+  - '_test\.go$'
 ```
 
-These patterns are applied first, before any rule-specific checks. Files matching these patterns will be completely excluded from dependency analysis.
+2. **Rule-Specific Ignore Patterns**: Files to ignore for specific rules
+```yaml
+rules:
+  - from: '...'
+    ignorePatterns:
+      - 'special_case_.*\.go$'
+```
+
+3. **Inline Comments**: Individual imports can be excluded using comments
+```go
+import "github.com/your-org/project/presentation" // depcheck:allow
+```
 
 ### Dependency Rules
 
-Each rule in the `rules` section consists of four components:
+Each rule in the `rules` section defines forbidden dependencies and their exceptions:
 
 ```yaml
 rules:
-  - from: "^github.com/your-org/project/domain/.*$"    # Source package pattern
-    to:                                                # Restricted package patterns
-      - "^github.com/your-org/project/infra/.*$"
-      - "^github.com/your-org/project/presentation/.*$"
-    allowedDependencies:                               # Exceptions to dependency restrictions
-      - "^github.com/your-org/project/presentation/types.*$"
+  - from: '^github.com/your-org/project/domain/.*$'    # Source package pattern
+    to:                                                # Forbidden package patterns
+      - '^github.com/your-org/project/infra/.*$'
+      - '^github.com/your-org/project/presentation/.*$'
+    allowedDependencies:                               # Exceptions to forbidden dependencies
+      - '^github.com/your-org/project/presentation/types.*$'
     ignorePatterns:                                    # Rule-specific files to ignore
-      - "special_case_.*.go$"
+      - 'special_case_.*\.go$'
 ```
 
-1. `from`: Defines the source package pattern where this rule applies. The pattern is matched against the package containing the import statement being checked.
-
-2. `to`: Lists package patterns that represent restricted dependencies. When an import matches any of these patterns, it will be flagged as a violation unless explicitly allowed.
-
-3. `allowedDependencies`: Specifies exceptions to the restricted patterns. If an import matches both a `to` pattern and an `allowedDependencies` pattern, it will be allowed.
-
-4. `ignorePatterns`: Defines additional file patterns to ignore, specific to this rule. These patterns are checked after the global ignore patterns.
+1. `from`: Defines the source package pattern where this rule applies
+2. `to`: Lists package patterns that are forbidden to import
+3. `allowedDependencies`: Specifies exceptions to the forbidden patterns
+4. `ignorePatterns`: Defines additional file patterns to ignore for this specific rule
 
 All patterns use Go's regular expression syntax. Package patterns (`from`, `to`, and `allowedDependencies`) are matched against full package paths, while ignore patterns are matched against filenames.
 
@@ -118,7 +127,7 @@ The tool evaluates patterns in the following order:
 2. Rule-specific ignore patterns
 3. Package matching (`from` pattern)
 4. Allowed dependencies
-5. Restricted dependencies (`to` patterns)
+5. Forbidden dependencies (`to` patterns)
 
 This hierarchical processing ensures clear and predictable rule evaluation. Files that match any ignore pattern (global or rule-specific) are skipped entirely, making it easy to exclude generated code, test files, or other special cases from dependency checking.
 
@@ -128,34 +137,34 @@ Here's a more complete example showing how to structure rules for a typical laye
 
 ```yaml
 ignorePatterns:
-  - "mock_.*.go$"
-  - ".*_mock.go$"
-  - "_test.go$"
-  - "generated_.*.go$"
+  - 'mock_.*\.go$'
+  - '.*_mock\.go$'
+  - '_test\.go$'
+  - 'generated_.*\.go$'
 
 rules:
-  # Domain layer dependencies
-  - from: "^github.com/your-org/project/domain/.*$"
+  # Prevent domain layer from depending on infrastructure or presentation
+  - from: '^github.com/your-org/project/domain/.*$'
     to:
-      - "^github.com/your-org/project/infra/.*$"
-      - "^github.com/your-org/project/presentation/.*$"
+      - '^github.com/your-org/project/infra/.*$'
+      - '^github.com/your-org/project/presentation/.*$'
     allowedDependencies:
-      - "^github.com/your-org/project/presentation/types.*$"
+      - '^github.com/your-org/project/presentation/types.*$'
 
-  # Presentation layer dependencies
-  - from: "^github.com/your-org/project/presentation/.*$"
+  # Prevent presentation layer from depending on infrastructure
+  - from: '^github.com/your-org/project/presentation/.*$'
     to:
-      - "^github.com/your-org/project/infra/.*$"
+      - '^github.com/your-org/project/infra/.*$'
     allowedDependencies:
-      - "^github.com/your-org/project/infra/common.*$"
+      - '^github.com/your-org/project/infra/common.*$'
     ignorePatterns:
-      - "legacy_.*.go$"
+      - 'legacy_.*\.go$'
 ```
 
 This configuration demonstrates how to:
 - Exclude common generated and test files globally
-- Enforce architectural boundaries between layers
-- Allow specific cross-layer dependencies where necessary
+- Define forbidden dependencies between architectural layers
+- Allow specific exceptions where cross-layer dependencies are necessary
 - Handle special cases with rule-specific ignore patterns
 
 The tool helps ensure your codebase maintains its intended architecture while providing the flexibility to handle real-world development needs through its layered exception handling and ignore patterns.
