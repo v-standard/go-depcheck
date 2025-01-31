@@ -1,6 +1,7 @@
 # go-depcheck
 
 [![Go Tests](https://github.com/v-standard/go-depcheck/actions/workflows/go-test.yml/badge.svg)](https://github.com/v-standard/go-depcheck/actions/workflows/go-test.yml)
+[![codecov](https://codecov.io/gh/v-standard/go-depcheck/graph/badge.svg?token=3V16ZB5XH6)](https://codecov.io/gh/v-standard/go-depcheck)
 
 A static analysis tool for validating package dependencies in Go projects. This tool helps maintain architectural boundaries by detecting and preventing unwanted dependencies between packages. The analyzer checks imports in your Go files against rules defined in a configuration file, ensuring your codebase adheres to the intended architecture.
 
