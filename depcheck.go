@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go/ast"
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/analysis/passes/inspect"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -40,19 +39,17 @@ type compiledRule struct {
 }
 
 var Analyzer = &analysis.Analyzer{
-	Name: "depcheck",
-	Doc:  doc,
-	Run:  run,
-	Requires: []*analysis.Analyzer{
-		inspect.Analyzer,
-	},
+	Name:     "depcheck",
+	Doc:      doc,
+	Run:      run,
+	Requires: []*analysis.Analyzer{},
 }
 
 // Variables to hold compiled rules and manage initialization state with mutex
 var (
 	compiledRules          []compiledRule
 	compiledIgnorePatterns []*regexp.Regexp
-	initOnce               sync.Once
+	prepareOnce            = sync.OnceValue(prepare)
 )
 
 func prepare() error {
@@ -151,14 +148,8 @@ func findConfigFile(configPath string) (string, error) {
 
 // hasExceptionComment checks if an import statement has an exception comment
 func hasExceptionComment(spec *ast.ImportSpec) bool {
-	if spec.Doc == nil {
-		return false
-	}
-
-	for _, comment := range spec.Doc.List {
-		if strings.HasPrefix(comment.Text, "// depcheck:allow") {
-			return true
-		}
+	if strings.HasPrefix(spec.Comment.Text(), "depcheck:allow") {
+		return true
 	}
 	return false
 }
@@ -192,14 +183,9 @@ func isAllowed(rule compiledRule, importPath string) bool {
 
 func run(pass *analysis.Pass) (any, error) {
 	// Execute initialization only once
-	var initError error
-	initOnce.Do(func() {
-		initError = prepare()
-	})
-
-	// Return immediately if initialization failed
-	if initError != nil {
-		return nil, initError
+	err := prepareOnce()
+	if err != nil {
+		return nil, err
 	}
 
 	pkgpath := pass.Pkg.Path()

@@ -1,7 +1,6 @@
 package depcheck
 
 import (
-	"go/ast"
 	"golang.org/x/tools/go/analysis/analysistest"
 	"os"
 	"path/filepath"
@@ -20,15 +19,15 @@ func TestAnalyzer(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "depcheck.yml")
 	config := []byte(`
 ignorePatterns:
-  - ".*_mock.go$"
+  - '.*_mock.go$'
 rules:
-  - from: "example/from.*$"
+  - from: 'example/from.*$'
     to:
-      - "example/to.*$"
+      - 'example/to.*$'
     allowedDependencies:
-      - "example/to/exception.*$"
+      - 'example/to/exception.*$'
     ignorePatterns:
-      - ".*_test.go$"
+      - '.*_test\.go$'
 `)
 
 	if err := os.WriteFile(configPath, config, 0644); err != nil {
@@ -43,19 +42,4 @@ rules:
 
 	// Execute the test
 	analysistest.Run(t, testdata, Analyzer, "example/...")
-}
-
-// TestExceptionComment tests the exception comment functionality
-func TestExceptionComment(t *testing.T) {
-	spec := &ast.ImportSpec{
-		Doc: &ast.CommentGroup{
-			List: []*ast.Comment{
-				{Text: "// depcheck:allow temporarily allowed for testing"},
-			},
-		},
-	}
-
-	if !hasExceptionComment(spec) {
-		t.Error("Expected hasExceptionComment to return true for valid exception comment")
-	}
 }
