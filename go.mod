@@ -1,6 +1,6 @@
 module github.com/v-standard/go-depcheck
 
-go 1.23
+go 1.24.2
 
 require (
 	golang.org/x/tools v0.29.0
